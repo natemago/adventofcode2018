@@ -58,19 +58,19 @@ print_rbx:
         push    rbp		; set up stack frame
 	
         mov     rdi,fmt         ; format for printf
-	mov	rsi,rbx         ; parameter for printf
-	mov	rax,0		; no xmm registers
+        mov	rsi,rbx         ; parameter for printf
+        mov	rax,0		; no xmm registers
         call    printf		; Call C function
 
-	pop	rbp		; restore stack
+        pop	rbp		; restore stack
 
-	mov	rax,0		; normal, no error, return value
-	ret			; return
+        mov	rax,0		; normal, no error, return value
+        ret			; return
 
 
         SECTION .data		; Data section, initialized variables
 
-	a:	dq	5	; long int a=5;
+        a:	dq	5	; long int a=5;
 fmt:    db "rbx=%ld", 10, 0	; The printf format, "\n",'0'
 
 
