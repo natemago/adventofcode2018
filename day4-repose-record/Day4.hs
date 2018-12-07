@@ -25,39 +25,62 @@ loadInput :: String -> [String]
 loadInput contents = do
     sortRecords (lines contents)
 
-sleepMinutes :: String -> String -> Int -> Map String Int -> [String] -> String -> Map String Int
-sleepMinutes prevType prevGuard prevMinute state records line 
-        | (null records) = state
-        | (line == "Guard") = 
-            case prevType of 
-                "Guard" -> do
-                    let guardName = getGuardName line
-                    let guardMinutes = Map.findWithDefault 0 guardName state
-                    let minute = getMinute line
-                    sleepMinutes "Guard" guardName minute (Map.insert guardName guardMinutes state) (drop 1 records) (head records)
-                "falls" -> do
-                    let guardName = getGuardName line
-                    let guardMinutes = Map.findWithDefault 0 guardName state
-                    let prevGuardMinutes = Map.findWithDefault 0 prevGuard state
-                    let minute = getMinute line
-                    let nextState = Map.insert prevGuard (prevGuardMinutes + 60 - minute) state
-                    sleepMinutes "falls" guardName minute (Map.insert guardName guardMinutes state) (drop 1 records) (head records)
-                "wakes" -> do
-                    let guardName = getGuardName line
-                    let guardMinutes = Map.findWithDefault 0 guardName state
-                    let minute = getMinute line
-                    let additionalMinutes = minute - prevMinute
-                    sleepMinutes "wakes" guardName minute (Map.insert guardName (guardMinutes + additionalMinutes) state) (drop 1 records) (head records)
+-- variant of map that passes each element's index as a second argument to f
+mapInd :: (a -> Int -> b) -> [a] -> [b]
+mapInd f l = zipWith f l [0..]
 
-        | (line == "falls") = sleepMinutes prevType prevGuard prevMinute state (drop 1 records) (head records)
-        | (line == "wakes") = sleepMinutes prevType prevGuard prevMinute state (drop 1 records) (head records)
+markAsAsleep :: [Int] -> Int -> Int -> [Int]
+markAsAsleep minutes start end =
+    mapInd (\m i -> if (i >= start) && (i < end) then m+1 else m ) minutes
+
+-- 
+nextState :: Map String [Int] -> String -> String -> Int -> String-> ((Map String [Int]), String, Int, String)
+nextState state line currGuard lastMinute lastType = do
+    let entryType = (lineType line)
+    let minute = getMinute line
+    let guardMinutes = Map.findWithDefault (take 60 (repeat 0)) currGuard state
+    
+    if entryType == "falls" then
+        (state, currGuard, minute, entryType)
+    else if entryType == "wakes" then 
+        ( (Map.insert currGuard (markAsAsleep guardMinutes lastMinute minute) state), currGuard, minute, entryType)
+    else -- guard
+        if lastType == "falls" then
+            ( (Map.insert (getGuardName line) (markAsAsleep guardMinutes lastMinute minute) state), currGuard, minute, entryType)
+        else
+            (state, (getGuardName line), minute, entryType)
 
 
+getNextState :: ((Map String [Int]), String, Int, String) -> String -> ((Map String [Int]), String, Int, String)
+getNextState a line = do
+    let (state, currGuard, lastMinute, lastType) = a
+    nextState state line currGuard lastMinute lastType
+
+solve :: String -> ([Int] -> Int) -> Int
+solve input f = do
+    let (state, _, _, _) = foldl getNextState (Map.empty, "", -1, "") (loadInput input)
+    let (guard, minutes) = Map.foldlWithKey (\(guard, a) k v -> if (f v) > a then (k, (f v)) else (guard, a)) ("", 0) state
+    let sleepHabits =  state Map.! guard
+    let (mostAsleepAt, sleptFor, _) = foldl (\(ma, sf, c) m ->  if sf < m then (c, m, c+1) else (ma, sf, c+1)) (0, 0, 0) sleepHabits
+    ((read (drop 1 guard)) :: Int) * mostAsleepAt
+
+
+maximum' :: [Int] -> Int
+maximum' [x] = x
+maximum' (x:xs)
+    | (maximum' xs) > x = maximum' xs
+    | otherwise         = x
 
 part1 :: String -> String
 part1 input = do
-    head (loadInput input)
+    let solution = solve input sum
+    show solution
+
+part2 :: String -> String
+part2 input = do
+    let solution = solve input maximum'
+    show solution
 
 main = do
     s <- readFile "input"
-    putStrLn ( part1 s)
+    putStrLn ("Part 1: " ++ (part1 s) ++ "\nPart 2: " ++ (part2 s) ++ "\n")
