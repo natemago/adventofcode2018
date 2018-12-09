@@ -21,6 +21,8 @@ function node = new_node(id)
   node.id = id;
   node.root = true;
   node.children = {};
+  node.scheduled = false;
+  node.timer = -1;
   return;
 endfunction
 
@@ -30,7 +32,6 @@ function [node, known_nodes] = add_child(node, c, known_nodes)
     child = new_node(c);
     child.root = false;
     known_nodes = [known_nodes; child];
-    printf(" ::: append child -> %s (parent %s)\n", child.id, node.id);
   endif
   children = node.children;
   children = [children; c];
@@ -43,7 +44,6 @@ function [node, known_nodes] = add_child(node, c, known_nodes)
     if known_nodes{i}.id == c
       child.root = false;
       known_nodes{i} = child;
-      printf(" :: set not root to %s (parent %s)\n", c, node.id);
     endif
   endfor
   return;
@@ -61,8 +61,7 @@ endfunction
 
 function all_nodes = load_deps(inputlines)
   all_nodes = {};
-  for i = 1:length(inputlines)
-    printf(" [%s]\n", inputlines{i});   
+  for i = 1:length(inputlines)  
     a = inputlines{i}(6);
     b = inputlines{i}(37);
     na = get_node(a, all_nodes);
@@ -123,7 +122,7 @@ function [node, nodes] = get_next(nodes, pop)
         c = node.children{j};
         if c == n.id
           if length(get_dependents(c, nodes)) == 1
-            n.root = true
+            n.root = true;
           endif
         endif
       endfor
@@ -141,45 +140,134 @@ function path = traverse(nodes)
   nodes = nodes(idxs);
   
   path = "";
-  disp(nodes);
   while length(nodes) > 0
     [node, nodes] = get_next(nodes, true);
     path = strcat(path, node.id);
-    printf("----------------------");
-    disp(nodes);
   endwhile
   
   return
 endfunction
 
 
+
 % ------------- part 2 -------------------
-function [node, nodes] = next_workable(nodes, queue)
-  node.id = "<none>"
-  [next, nodes] = get_next(nodes, false);
-  if next.available
-    node = next
-    get_next(nodes, true);
-  endif
+
+function [next, nodes] = schedule_next(nodes)
+  next.id = "<none>";
+  res = {};
+  for i = 1:length(nodes)
+    n = nodes{i};
+    if n.root && !n.scheduled && next.id == "<none>"
+      next = n;
+      n.scheduled = true;
+    endif
+    res = [res; n];
+  endfor
+  nodes = res;
   return
 endfunction
 
-function [nodes, done] = do_work(nodes)
-  done = 0;
-  result = {};
+function print_nodes(nodes)
   for i = 1:length(nodes)
     n = nodes{i};
-    if n.time == 0
-      done = done + 1;
-      continue
+    if n.root
+      printf("<R");
+    else
+      printf("__");
     endif
-    if n.in_progress
-      n.timer = n.timer - 1;
+    if n.scheduled
+      printf("S]");
+    else
+      printf("_]");
     endif
-    result = [result; n];
+    printf("%s [%d](", n.id, n.timer);
+    for j = 1:length(n.children)
+      printf("%s ", n.children{j});
+    endfor
+    
+    printf("), ");
+  endfor
+  printf("\n");
+endfunction
+
+function nodes = pop_node(node, nodes)
+  result = {};
+  for i = 1:length(nodes)
+    if nodes{i}.id != node.id
+      n = nodes{i};
+      for j = 1:length(node.children)
+        c = node.children{j};
+        if c == n.id
+          if length(get_dependents(c, nodes)) == 1
+            n.root = true;
+          endif
+        endif
+      endfor
+      n.children = remove_element(node.id, n.children);
+      result = [result; n];
+    endif
   endfor
   nodes = result;
-  return
+  return;
+endfunction
+
+function q = remove_at(idx, q)
+  res = {};
+  for i = 1:length(q)
+    if i != idx
+      res = [res; q{i}];
+    endif
+  endfor
+  q = res;
+  return;
+endfunction
+
+function total = part2(nodes, max_workers, overhead)
+  total = 0;
+  q = {};
+  doneq = {};
+
+  while true
+    % populate q
+
+    if length(q) == 0 && length(nodes) == 0
+      break
+    endif
+
+    while length(q) < max_workers
+      [n, nds] = schedule_next(nodes);
+      nodes = nds;
+      if n.id == "<none>"
+        break
+      endif
+      n.timer = (n.id - 'A') + overhead;
+      q = [q; n];
+    endwhile
+
+    % print_nodes(q);
+    rmqidxs = {};
+    for i = 1:length(q)
+      if q{i}.timer == 0
+        doneq = [doneq; q{i}];
+        rmqidxs = [rmqidxs;i];
+      else
+        q{i}.timer = q{i}.timer - 1;
+      endif
+    endfor
+
+    for i = 1:length(rmqidxs)
+      q = remove_at(rmqidxs{i}, q);
+    endfor
+
+    for i = 1:length(doneq)
+      nds = pop_node(doneq{i}, nodes);
+      nodes = nds;
+    endfor
+    doneq = {};
+    total = total + 1;
+  endwhile
+
+  return;
 endfunction
 
 
@@ -188,3 +276,6 @@ nodes = load_deps( load_input( "input" ) );
 
 tasks = traverse(nodes);
 printf("Part 1: [%s]\n", tasks);
+% 5 elfs + myself DUUH!
+tot = part2(nodes, 6, 60);
+printf("Part 2: %d\n", tot)
