@@ -159,9 +159,9 @@ function sort_carts(i1,c1,i2,c2){
 }
 
 function printarr(arr, sep,                                            result, i){
-    result = arr[0]
+    result = "{"0"}"arr[0]
     for (i=1; i<length(arr);i++){
-        result=result""sep""arr[i]
+        result=result""sep"{"i"}"arr[i]
     }
     print result
 }
@@ -176,6 +176,16 @@ function removeat(arr, i, result,                          k,kk){
     }
 }
 
+
+function countColided(colided,               k,c){
+    c = 0
+    for (k in colided){
+        if (colided[k]"|" != "|"){
+            c++
+        }
+    }
+    return c
+}
 
 BEGIN {
 
@@ -213,113 +223,59 @@ END {
     print curr_line " lines."
     print "Start driving"
 
-    pajo[0] = 1
-    pajo[1] = 1
-    pajo[2] = 3
-    print "P"length(pajo)
-    delete pajo[1]
-    print "P"length(pajo)
 
-    PART1 = 0
+
 
     count = 0
     collide = 0
-    N=4
+    first=1
     while (1) {
-        
-        #print "=============================="
-        #printCarts(carts, curr_cart, rails, width, height)
-
         # now, sort
         asort(cartsi, sorted_cartsi, "sort_carts")
-        #print "L:"sorted_cartsi[2]
-        #printarr(cartsi,", ")
 
-        delete toberemoved
-        tbrc = 0
         for (k = 0; k < length(cartsi); k++) {
             sc = sorted_cartsi[(k+1)]
+            if (colided[sc]){
+                continue
+            }
             moveNext(sc, carts, rails)
             for (i = 0; i < (length(cartsi)-1); i++) {
                 for (j = i+1; j < length(cartsi); j++) {
+                    if (colided[cartsi[i]] || colided[cartsi[j]]){
+                        continue
+                    }
                     if (doTheseCollide(cartsi[i], cartsi[j], carts)) {
-                        print "cartsi="length(cartsi)
                         collide = 1
                         colX = carts[cartsi[i], "pos", "x"]
                         colY = carts[cartsi[i], "pos", "y"]
-                        print "Colliding: " cartsi[i] " with " cartsi[j] " @ " count
-
-                        if(PART1){
-                            break
+                        #print "Colliding: " cartsi[i] " with " cartsi[j] " @ " count "("colX","colY")"
+                        if (first){
+                            print "Part 1: first collision at ("(colX-1)","colY")"
+                            first=0
                         }
+
                         # part 2, remove the crashing cars
-                        if (!toberemoved[i+1]){
-                            print "add "i
-                            toberemoved[i+1] = i+1
+                        if (!colided[i]){
+                            colided[i] = "yes"
                         }
-                        if (!toberemoved[j+1]){
-                            toberemoved[j+1] = j+1
+                        if (!colided[j]){
+                            colided[j] = "yes"
                         }
                     }
                 }
-                # if(collide){
-                #     break
-                # }
+
             }
         }
 
-        if (!PART1){
-
-            if(length(toberemoved)){
-                printarr(toberemoved, "/")
-                for(i in toberemoved){
-                    if (toberemoved[i]) {
-                        print "delete " (i-1) ":" (toberemoved[i]-1)
-                        delete cartsi[(toberemoved[i] - 1)]
-                    }
-                    
+        if (countColided(colided) == (carts_number-1) ) {
+            print "Part2: "
+            for (kk in cartsi){
+                if(!colided[cartsi[kk]]){
+                    print "Cart: " cartsi[kk] " at " (carts[cartsi[kk], "pos", "x"]-1) "," carts[cartsi[kk], "pos", "y"]
                 }
-                _c = 0
-                for (i in cartsi){
-                    _n[_c] = cartsi[i]
-                    _c++
-                }
-                delete cartsi
-                for (i in _n){
-                    cartsi[i] = _n[i]
-                }
-                printarr(cartsi,"|")
-                # if (hasbeenhere){
-                #     exit 1
-                # }else{
-                #     hasbeenhere=1
-                # }
-                #exit 0
-               
             }
-
-            if (length(cartsi) == 1){
-                print "Final cart at: " carts[cartsi[0]] "," carts[cartsi[0]]
-                exit 0
-            }
+            exit 0
         }
-        
-
-        if (collide && PART1) {
-            break
-        }
-
-        # print count
-        # printCarts(carts, curr_cart, rails, width, height)
-        # print "=============================="
-        # 
-        
-        # count++
-        # if (count >= 25){
-        #     break
-        # }
+        count++
     }
-    printCarts(carts, curr_cart, rails, width, height)
-    #print "=============================="
-    print "Collision at: " (colX-1) "," colY 
 }
