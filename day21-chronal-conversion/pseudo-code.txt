@@ -1,0 +1,32 @@
+r4=123
+r4= 456 & r4
+if(r4 == 72) { r4 = 1; } else { r4 = 0; }
+PC = PC + r4
+PC=0
+r4=0 // if 456 & 123 == 72, all ok, continue
+r3 = r4 | 65536 
+r4 = 14464005
+r2 = r3 & 255
+r4=r4+r2
+r4 = r4 & 16777215
+r4=r4*65899
+r4=r4 & 16777215
+if (256 > r3) { r2 = 1; } else { r2= 0 }
+PC = PC + r2 // if 256 > r3 goto LABEL1
+PC = PC + 1
+PC = 27
+r2=0   // 
+r1 = r2+r1  // r1 += r2
+r1 = r1*256  // r1 *= 256 (<<8)
+if( r1 > r3 ) { r1= 1 } else { r1 = 0 }
+set PC=PC + r1
+PC=PC+1
+PC = 25
+r2 = r2 + 1
+PC=17
+r3 = r2
+PC = 7
+r2 = r4 == r0 ? 1 : 0 // !!!! if r4 == input, then jump out  and HALT. So we need to check the eqrr instruction to see what is being compared to. !!!!
+PC = PC + r2
+PC = 5
+
