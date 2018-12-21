@@ -10,6 +10,7 @@ typedef struct Node {
     int c_number;
     struct Node **children;
     struct Node *parent;
+    int is_group;
     char *payload;
 } Node;
 
@@ -21,6 +22,7 @@ typedef struct AST {
 Node *new_node(){
     Node *node = malloc(sizeof(Node));
     node->c_number = 0;
+    node->is_group = 0;
     node->payload = NULL;
     node->children = NULL;
     return node;
@@ -42,16 +44,46 @@ void append_child(Node *root, Node *child) {
 }
 
 
+typedef struct Stack {
+    Node* node;
+    struct Stack* next;
+} Stack;
+
+
+Stack *push(Stack *stack, Node *node){
+    Stack *frame = malloc(sizeof(Stack));
+    frame->node = node;
+    frame->next = NULL;
+    printf("On stack: %x\n", frame);
+    if(stack == NULL){
+        return frame;
+    }
+    frame->next = stack;
+    return frame;
+}
+
+
+Stack *pop(Stack *stack){
+    if(stack != NULL){
+        Stack *next = stack->next;
+        printf("Freeing %x\n",stack);
+        free(stack);
+        return next;
+    }
+    return stack;
+}
+
+
 void parse(char *input, Node* parent, Node* node){
     printf("   :: P\n");
     char buff [2048];
     int p_count = 0;
     char curr = input[0];
-    if (curr == 0 || curr == '$'){
+    if (curr == 0){
         return;
     }
     printf("   :: ...\n");
-    while(curr != '|' && curr != '(' && curr != ')' && curr != 0 && curr != '$') {
+    while(curr != '|' && curr != '(' && curr != ')' && curr != 0) {
         buff[p_count] = curr;
         p_count++;
         curr = input[p_count];
@@ -96,26 +128,122 @@ void parse(char *input, Node* parent, Node* node){
         }
         
         if (input[0] == '|'){
-            for(int i = 0; i < parent->parent->c_number; i++){
-                printf(" :: upper kid\n");
-                parse(input+1, parent->parent->children[i], child);
-            }
-            
+            printf("TPT: %s %s %s\n", parent->payload, node->payload, child->payload);
+            parse(input+1, parent, child);
+            printf("TTT: %s\n", child->payload);
         }
     }
     printf("        :: done\n");
 }
 
 
+Node* parse_group(char *input) {
+    if(input == NULL || *input == 0){
+        return NULL; // ?
+    }
+
+    //Stack *stack = malloc(sizeof(Stack));
+    Node *root = new_node();
+    Stack *stack = push(NULL, root);
+    //stack = push(stack, root);
+
+    char curr;
+    char pbuff[1024];
+    int psize = 0;
+
+    while(1){
+        if (stack == NULL || input == NULL){
+            break;
+        }
+        Node *node = stack->node;
+        curr = *input;
+        printf("curr=%c [node=%x, %s]\n", curr, node, node->payload);
+
+        if(curr == 0){
+            break; // we're done
+        }
+
+        psize = 0;
+        while(curr != '|' && curr != '(' && curr != ')' && curr != 0){
+            pbuff[psize] = curr;
+            input++;
+            psize++;
+            curr = *input;
+        }
+        pbuff[psize] = 0;
+        
+        if (psize > 0){
+            // add the payload
+            if(node->payload == NULL){
+                node->payload = malloc(psize+1);
+                strcpy(node->payload, pbuff);
+            }else{
+                Node *child = new_node();
+                child->payload = malloc(psize+1);
+                strcpy(child->payload, pbuff);
+                append_child(node, child);
+            }
+            
+        }
+
+        if(curr == 0){
+            break; // we're done
+        }
+
+        if (curr == '('){
+            // open new group
+            Node *group = new_node();
+            group->is_group = 1;
+            append_child(node, group);
+            // push group on stack
+            stack = push(stack, group);
+            // start new child
+            Node *child = new_node();
+            append_child(group, child);
+            //push child on stack
+            stack = push(stack, child);
+        }else if(curr == '|'){
+            // sibling
+            // finish the previous child - pop from stack
+            stack = pop(stack);
+            // begin new child
+            Node *child = new_node();
+            Node *group = stack->node;
+            append_child(group, child);
+            stack = push(stack, child);
+            
+        }else if(curr == ')'){
+            // end group
+            // pop last child
+            stack = pop(stack);
+
+            Node *group = stack->node;
+            // pop group
+            stack = pop(stack);
+
+            // check if the group has a sibling
+
+        }else{
+            printf("BOOM '%c'\n", curr);
+            exit(1);
+        }
+        input++;
+    }
+    
+    return root;
+}
+
 
 
 AST *parse_ast(char *input){
     AST *tree = malloc(sizeof(AST));
 
-    Node *root = new_node();
-    tree->root = root;
+    //Node *root = new_node();
+    //tree->root = root;
 
-    parse(input, root, new_node());
+    //parse(input, root, new_node());
+
+    tree->root = parse_group(input);
 
     return tree;
 }
@@ -123,20 +251,27 @@ AST *parse_ast(char *input){
 
 char* get_longest_path(Node* node) {
     char *path;
-    printf("(");
+    if(node->is_group){
+        printf("G");
+    }
     if(node->payload != NULL){
-        printf("[%s]", node->payload);
+        printf("%s", node->payload);
     }else{
-        printf("[]");
+        printf("");
     }
     
     if(node->c_number > 0) {
+        printf("(");
         for(int i = 0; i < node->c_number; i++){
             get_longest_path(node->children[i]);
+            if(i < node->c_number-1){
+                printf("|");
+            }
             
         }
+        printf(")");
     }
-    printf(")");
+    
     return path;
 }
 
@@ -192,7 +327,17 @@ void walk(int x, int y, int **matrix, Node *node){
     }
     if(node->c_number > 0){
         for(int i = 0; i < node->c_number; i++){
-            walk(x,y, matrix, node->children[i]);
+            Node *child = node->children[i];
+            if (child->is_group){
+                for(int j = 0; j < child->c_number; j++){
+                    for(int c = i+1; c < node->c_number; c++){
+                        walk(x,y,matrix, child->children[j]);
+                        walk(x,y,matrix, node->children[c]);
+                    }
+                }
+            }else{
+                walk(x,y, matrix, node->children[i]);
+            }
         }
     }
 }
@@ -230,12 +375,13 @@ int door_between(int x, int y, int xx, int yy, int **m) {
     if (xx != x){
         _x = xx > x ? x+1: x-1;
     }else{
-        _y = yy > y ? x+1: x-1;
+        _y = yy > y ? y+1: y-1;
     }
     return m[_y][_x] == DOOR;
 }
 
 void walk_through_doors(int **m, int**dists, int x, int y){
+    //printf(" --\n");
     int poss[4][2] = {
                 {x, y-2},
         {x-2, y},           {x+2, y},
@@ -249,23 +395,31 @@ void walk_through_doors(int **m, int**dists, int x, int y){
         if(cx < 0 || cx > 2047 || cy < 0 || cy > 2047 || (cx == 1023 && cy == 1023)) {
             continue;
         }
+        //printf("Door between %d,%d and %d,%d - %d\n", x,y, cx,cy, door_between(x,y, cx,cy, m));
         if(m[cy][cx] > 0 && door_between(x,y, cx,cy, m)){
+            //printf("  :: ok, in.\n");
             int cd = dists[cy][cx];
             if(cd == 0 ){
+                //printf(" :: 1\n");
                 dists[cy][cx] = c + 1;
                 walk_through_doors(m, dists, cx, cy);
             }else{
                 if(cd > c){
+                    //printf(" :: 2\n");
                     if(cd - c > 1){
+                        //printf(" :: 3\n");
                         dists[cy][cx] = c + 1;
                         walk_through_doors(m, dists, cx, cy);
                     }
                 }else if (cd < c) {
+                    //printf(" :: 4\n");
                     if(c - cd > 1){
+                        //printf(" :: 5\n");
                         dists[y][x] = cd + 1;
                         walk_through_doors(m, dists, x, y);
                     }
                 }
+                //printf(" :: 6\n");
             }
         }
     }
@@ -286,7 +440,9 @@ void print_map(int x, int xx, int y, int yy, int**m, const char* sep){
 void print_map_char(int x, int xx, int y, int yy, int**m){
     for(int i = y; i <= yy; i++){
         for(int j = x; j <= xx; j++){
-            if(m[i][j] == DOOR){
+            if(i == 1023 && j == 1023){
+                printf("X");
+            }else if(m[i][j] == DOOR){
                 printf("|");
             }else if(m[i][j] == ROOM) {
                 printf(".");
@@ -308,10 +464,11 @@ char* load_input(char *filename) {
     fclose(f);
     buff[size] = 0;
 
-    for(int i = 0; i < size - 3; i++){
+    for(int i = 0; i < size - 1; i++){
         buff[i] = buff[i+1];
     }
-    buff[size-3] = 0;
+    buff[size-2] = 0;
+    buff[size-1] = 0;
     return buff;
 }
 
@@ -328,7 +485,7 @@ int get_max(int **m){
 }
 
 int main(){
-    char *input = load_input("input.test");
+    char *input = load_input("input");
     printf(":: input loaded\n");
     printf("%s\n", input);
     AST *tree = parse_ast(input);
@@ -345,4 +502,6 @@ int main(){
     walk_through_doors(m, dists, 1023, 1023);
     print_map(minx, maxx, miny, maxy, dists, " ");
     printf("Part 1: %d\n", get_max(dists));
+    // Node *root = parse_group(input);
+    // get_longest_path(root);
 }
