@@ -43,16 +43,6 @@ class Nanobot {
 
 }
 
-class Pair<F,S> {
-    public F first;
-    public S second;
-
-    public Pair(F first, S second){
-        this.first = first;
-        this.second = second;
-    }
-}
-
 
 class Teleporation {
     public static int distance(int[]p1, int[]p2){
@@ -93,6 +83,9 @@ class Teleporation {
         for(Nanobot bot: bots){
             Nanobot sb = new Nanobot();
             sb.r = bot.r/scale;
+            if(sb.r == 0){
+                sb.r = 1;
+            }
             sb.pos = new int []{
                 bot.pos[0]/scale,
                 bot.pos[1]/scale,
@@ -123,8 +116,8 @@ class Teleporation {
         
         for(Nanobot bot: bots){
             for(int i = 0; i < 3; i++){
-                if(min[i] > (bot.pos[i] + bot.r) ){
-                    min[i] = (bot.pos[i] + bot.r);
+                if(min[i] > (bot.pos[i] - bot.r) ){
+                    min[i] = (bot.pos[i] - bot.r);
                 }
             }
         }
@@ -132,114 +125,73 @@ class Teleporation {
         return min;
     }
 
+    public int[] findBest(int[] around, List<Nanobot> bots, int jiggleScale) {
+        int [] bestSoFar = around;
+        int bestCoverage = getCoverage(around, bots);
+        int bestDist = Teleporation.distance(bestSoFar, new int[] {0,0,0});
 
-    public Pair<Integer, List<int[]>> getClosestPoint(int[]from, int[]to, List<Nanobot> bots){
-        System.out.println("getClosestPoint: " + Arrays.toString(from) + " => " + Arrays.toString(to));
-        int []closest = null;
-        int rangecount = 0;
-        List<int[]>possibleQuadrants = new ArrayList<>();
-        for(int x = from[0]; x <= to[0]; x++){
-            for(int y = from[1]; y <= to[1]; y++){
-                for(int z = from[2]; z <= to[2]; z++){
-                    int inRangeOf = 0;
-                    int []p = new int[]{x,y,z};
-                    for(Nanobot bot: bots){
-                        if(bot.isInRange(p)){
-                            inRangeOf++;
-                        }
-                    }
-                    if(closest == null || inRangeOf >= rangecount){
-                        closest = p;
-                        rangecount = inRangeOf;
-                        continue;
-                    }
-                }
+        for(int i = 0; i < 10000; i++){
+            int [] pos = {
+                randInt(bestSoFar[0] - jiggleScale, bestSoFar[0] + jiggleScale),
+                randInt(bestSoFar[1] - jiggleScale, bestSoFar[1] + jiggleScale),
+                randInt(bestSoFar[2] - jiggleScale, bestSoFar[2] + jiggleScale),
+            };
+
+            int cov = getCoverage(pos, bots);
+            if(cov > bestCoverage){
+                bestCoverage = cov;
+                bestDist = Teleporation.distance(pos, new int[]{0,0,0});
+                bestSoFar = pos;
             }
         }
 
-        for(int x = from[0]; x <= to[0]; x++){
-            for(int y = from[1]; y <= to[1]; y++){
-                for(int z = from[2]; z <= to[2]; z++){
-                    int inRangeOf = 0;
-                    int []p = new int[]{x,y,z};
-                    for(Nanobot bot: bots){
-                        if(bot.isInRange(p)){
-                            inRangeOf++;
-                        }
-                    }
-                    if(inRangeOf == rangecount && 
-                        Teleporation.distance(p, new int[]{0,0,0}) == Teleporation.distance(closest, new int[]{0,0,0,})){
-                        possibleQuadrants.add(p);
-                    }
-                }
-            }
-        }
-
-        return new Pair(rangecount, possibleQuadrants);
+        return bestSoFar;
     }
 
-    public int[] getClosestPointVolumeSubdivide(List<Nanobot> nanobots){
-        int scale = 10000000;
-        int closest[] = null;
-        List<Nanobot> bots = getWithScale(nanobots, scale);
-        int []from = getMin(bots);
-        int []to = getMax(bots);
-        List<int[][]> exploreNext = new ArrayList<>();
-        
-        exploreNext.add(new int[][]{from, to});
-        while(scale > 0){
-            System.out.println("Scale: " + scale + ", have " + exploreNext.size() + " to explore next.");
-            List<Pair<Integer, List<int[]>>> possibilites = new ArrayList<>();
-            for(int[][] ex: exploreNext){
-                Pair<Integer, List<int[]>> p = getClosestPoint(ex[0], ex[1], bots);
-                possibilites.add(p);
-            }
+    public int[]getMeanPoint(List<Nanobot> bots){
+        int[] mean = {0,0,0};
 
-            possibilites.sort(new Comparator<Pair<Integer, List<int[]>>>() {
-                public int compare(Pair<Integer,List<int[]>>p1 ,Pair<Integer,List<int[]>> p2){
-                    if(p1.first == p2.first){
-                        return Teleporation.distance(p1.second.get(0), new int []{0,0,0}) - Teleporation.distance(p2.second.get(0), new int []{0,0,0});
-                    }
-                    return p2.first - p1.first;
-                }
-            });
-
-            exploreNext = new ArrayList<>();
-            for(Pair<Integer, List<int[]>>poss: possibilites){
-                System.out.println("Coverage by: " + poss.first);
-                if(poss.first < possibilites.get(0).first){
-                    continue;
-                }
-                for(int [] c: poss.second){
-                    exploreNext.add(new int[][]{
-                        {
-                            c[0]*10,
-                            c[1]*10,
-                            c[2]*10,},
-                        {
-                            (c[0]+1)*10,
-                            (c[1]+1)*10,
-                            (c[2]+1)*10,
-                        }
-                    });
-                }
-            }
-            
-            scale /= 10;
-            if(scale != 0){
-                bots = getWithScale(nanobots, scale);
-            }
-            if(scale == 0){
-                closest = possibilites.get(0).second.get(0);
-                int f[] = possibilites.get(possibilites.size() -1 ).second.get(0);
-                System.out.println("Closest dist: " + (closest[0] + closest[1] + closest[2]));
-                System.out.println("Alternative: " + Arrays.toString(f) + "; " + (f[0] + f[1] + f[2]));
+        for(Nanobot bot: bots){
+            for(int i = 0; i < 3; i++){
+                mean[i] += bot.pos[i];
             }
         }
 
-        return closest;
+        for(int i = 0; i < 3; i++){
+            mean[i] /= bots.size();
+        }
+
+        return mean;
     }
 
+    public int [] bestSimulatedAnnealing(List<Nanobot> bots){
+        int temperature = 10000000;
+        int [] bestSoFar = getMeanPoint(bots);
+
+        while(temperature > 0){
+            //System.out.println("Current temp: " + temperature);
+            bestSoFar = findBest(bestSoFar, bots, temperature);
+            temperature /= 10;
+        }
+        return bestSoFar;
+    }
+
+    public int getCoverage(int []point, List<Nanobot> bots) {
+        int cov = 0;
+        for(Nanobot bot: bots){
+            if(bot.isInRange(point)){
+                cov++;
+            }
+        }
+
+        return cov;
+    }
+
+
+    public int randInt(int from, int to){
+        int diff = to - from;
+        return ((int)(Math.random()*diff)) + from;
+    }
 
     public int part1(String inputFile) throws IOException{
         List<Nanobot> bots = loadInput(inputFile);
@@ -258,9 +210,26 @@ class Teleporation {
         return inRange;
     }
 
-    public int part2(String inputFile) throws IOException{
-        int [] closest = getClosestPointVolumeSubdivide(loadInput(inputFile));
-        return closest[0] + closest[1] + closest[2];
+    // 104703112
+    public int part22(String inputFile) throws IOException{
+        int [] bestOfAll = null;
+        int bestDist = Integer.MAX_VALUE;
+        while(true){
+            int[]point = bestSimulatedAnnealing(loadInput(inputFile));
+            int p = point[0] + point[1] + point[2];
+            if(bestOfAll == null){
+                bestOfAll = point;
+                bestDist = p;
+                continue;
+            }
+            if(p < bestDist){
+                p = bestDist;
+                bestOfAll = point;
+            }
+            System.out.println(">curr: " + p);
+            System.out.println("Part 2: best so far: " + Arrays.toString(bestOfAll) + " with distance " + bestDist);
+        }
+        
     }
 }
 
@@ -272,7 +241,7 @@ public class Solution {
         Teleporation t = new Teleporation();
         
         System.out.println("Part 1: " + t.part1("input"));
-        System.out.println("Part 2: " + t.part2("input"));
+        System.out.println("Part 2: " + t.part22("input"));
     }
 
 }
