@@ -70,133 +70,88 @@ class CombatMap {
         return getUnitsSorted().filter { it.type == type && it.alive()}
     }
 
-    fun findShortestPath(A: Pair<Int, Int>, B: Pair<Int, Int>):List<Pair<Int,Int>> {
-        // A* path finding
-        var evaluated:HashSet<String> = HashSet<String>()
-        var openSet:MutableList<Pair<Int,Int>> = mutableListOf()
-        var cameFrom:HashMap<String, Pair<Int,Int>> = HashMap()
-        var gScore:HashMap<String, Int> = HashMap()
-        var fScore:HashMap<String, Int> = HashMap()
-        val Infinity = 1000000 // some high number
-        var resultPath:MutableList<Pair<Int,Int>> = mutableListOf()
+    fun findNearestUnit(from:Pair<Int,Int>, ofType:String):Pair<Unit, List<Pair<Int,Int>>>? {
+      // bfs
+      var visited:HashSet<Pair<Int,Int>> = HashSet()
+      var cameFrom:HashMap<String, Pair<Int,Int>> = HashMap()
+      var q:MutableList<Pair<Int, Int>> = mutableListOf()
+      var path:MutableList<Pair<Int,Int>> = mutableListOf()
+      var unit:Unit? = null
 
-        gScore["$A"] = 0
-        fScore["$A"] = getDistanceEstimation(A,B)
+      q.add(from)
 
-        openSet.add(A)
+      while(q.size > 0){
+        //println("q=${q.size}")
+        val curr:Pair<Int,Int> = q.get(0)
+        q = q.drop(1).toMutableList()
+        if (visited.contains(curr)){
+          continue
+        }
+        visited.add(curr)
 
-        while (openSet.size > 0) {
-            val curr = openSet[0]
-            if (curr == B){
-                // reconstruct path
-                var cameFromPoint = cameFrom["$curr"]
-                while (cameFromPoint != null){
-                    resultPath.add(cameFromPoint)
-                    cameFromPoint = cameFrom["$cameFromPoint"]
+        if(map[curr.second][curr.first] > 0 && units[map[curr.second][curr.first]]!!.type == ofType){
+          // found, reconstruct path
+          var p:Pair<Int, Int>? = curr
+          while (p != null){
+            path.add(p)
+            //println("$p came from ${cameFrom["$p"]}")
+            p = cameFrom["$p"]
+          }
+          path = path.asReversed()
+          unit = units[map[curr.second][curr.first]]!!
+          break
+        }
+        val (x,y) = curr
+        val prev:Pair<Int,Int>? = cameFrom["$curr"]
+        for(p:Pair<Int,Int> in listOf(Pair(x,y-1),Pair(x-1,y),Pair(x+1,y),Pair(x,y+1))){
+          val (xx,yy) = p
+          if(xx >=0 && xx < width && yy >=0 && yy < height){
+            // inside the map
+            val c = map[yy][xx]
+            if (c >= 0 && (prev == null || prev != p) && !visited.contains(p)){
+              if(c > 0){
+                if(units[c]!!.type != ofType) {
+                  continue
                 }
-                break
+              }
+              q.add(p)
+              cameFrom["$p"] = curr
             }
-
-            evaluated.add("$curr")
-            openSet.remove(curr)
-
-            for (point in getMoveableLocations(curr, B)){
-                if(evaluated.contains("$point")){
-                    continue
-                }
-                val tScore = gScore.getOrElse("$curr"){Infinity} + 1 // 1 is the distance to the neigbour
-                if (!openSet.contains(point)){
-                    openSet.add(point)
-                    // sort the open set by fscore
-                    openSet.sortWith(compareBy{ fScore.getOrElse("$it"){ Infinity }  })
-                }else if (tScore > gScore.getOrElse("$point"){Infinity} ){
-                    continue
-                }
-                cameFrom["$point"] = curr
-                gScore["$point"] = tScore
-                fScore["$point"] = tScore + getDistanceEstimation(point, B)
-            }
+          }
         }
-
-        return resultPath.asReversed()
-    }
-
-    fun getDistanceEstimation(A: Pair<Int, Int>, B: Pair<Int, Int>):Int{
-        // Manhattan distance
-        val (ax, ay) = A
-        val (bx, by) = B
-        return abs(ax - bx) + abs(ay - by)
-    }
-
-    fun getClosestUnitOfType(fromUnit: Unit, type:String):Pair<Unit, List<Pair<Int,Int>>>? {
-        val unitsOfType:List<Unit> = getUnitsOfType(type).filter{ it.alive() }
-        if (unitsOfType.size == 0) {
-            println("No units of type $type")
-            return null
-        }
-        var shortestPath:List<Pair<Int,Int>> = findShortestPath(Pair(fromUnit.x, fromUnit.y), Pair(unitsOfType[0].x, unitsOfType[0].y))
-        var closestUnit:Unit = unitsOfType[0]
-        for (unit in unitsOfType.drop(1)){
-            val path = findShortestPath(Pair(fromUnit.x, fromUnit.y), Pair(unit.x, unit.y))
-            if (path.size > 0 && path.size < shortestPath.size){
-                shortestPath = path
-                closestUnit = unit
-            }
-        }
-        return Pair(closestUnit, shortestPath)
-    }
-    
-    fun getClosestUnitOfType2(fromUnit: Unit, type:String):Pair<Unit, List<Pair<Int,Int>>>? {
-        val neighbours = getNeighbourUnits(fromUnit)!!.filter { it.type == type }
-        if (neighbours.size > 0 ){
-            return Pair(neighbours[0], listOf(Pair(neighbours[0].x, neighbours[0].y)))
-        }
-        val unitsOfType:List<Unit> = getUnitsOfType(type).filter{ it.alive() }
-        if (unitsOfType.size == 0) {
-            println("No units of type $type")
-            return null
-        }
-        var possibleLocations:HashSet<Pair<Int,Int>> = HashSet()
-        for (u in unitsOfType) {
-            for (p in getMoveableLocations(Pair(u.x, u.y), Pair(u.x, u.y))) {
-                possibleLocations.add(p)
-            }
-        }
-        var locationsSorted:MutableList<Pair<Int,Int>> = possibleLocations.toMutableList()
-        if ( locationsSorted.size == 0 ) {
-            return null
-        }
-        locationsSorted.sortWith(compareBy({it.second}, {it.first}))
-        var shortestPath:List<Pair<Int,Int>>? = null
-        var closestPoint:Pair<Int, Int>? = null
-        
-        for (p in locationsSorted){
-            val path = findShortestPath(Pair(fromUnit.x, fromUnit.y), p)
-            if (path.size > 0 && (shortestPath == null || path.size < shortestPath.size)) {
-                shortestPath = path
-                closestPoint = p
-            }
-        }
-        if ( closestPoint == null ) {
-            return null
-        }
-
-        var (x,y) = closestPoint
-        if(y - 1 >= 0 && map[y-1][x] > 0) {
-            return Pair(units[map[y-1][x]]!!, shortestPath!! + listOf(closestPoint))
-        }
-        if(x - 1 >= 0 && map[y][x-1] > 0) {
-            return Pair(units[map[y][x-1]]!!, shortestPath!! + listOf(closestPoint))
-        }
-        if(x + 1 >= 0 && map[y][x+1] > 0) {
-            return Pair(units[map[y][x+1]]!!, shortestPath!! + listOf(closestPoint))
-        }
-        if(y + 1 >= 0 && map[y+1][x] > 0) {
-            return Pair(units[map[y+1][x]]!!, shortestPath!! + listOf(closestPoint))
-        }
+      }
+      if(unit == null){
         return null
+      }
+      return Pair(unit, path)
     }
-    
+
+    fun findNearestUnitFrom(from:Unit):Pair<Unit, List<Pair<Int,Int>>>? {
+      var minPath:Pair<Unit, List<Pair<Int, Int>>>? = null
+      val (x,y) = Pair(from.x, from.y)
+      for(p:Pair<Int,Int> in listOf(Pair(x,y-1),Pair(x-1,y),Pair(x+1,y),Pair(x,y+1))){
+        if(map[p.second][p.first] == -1){
+          continue
+        }else if(map[p.second][p.first] > 0){
+          val u = units[map[p.second][p.first]]!!
+          if (u.type == from.type){
+            continue
+          }
+          if(minPath == null || minPath.second.size > 1) {
+            minPath = Pair(u, listOf(p))
+            continue
+          }
+        }
+        val n = findNearestUnit(p, if (from.type == "G") "E" else "G")
+        if (n != null){
+          if(minPath == null || n.second.size < minPath.second.size){
+            minPath = n
+          }
+        }
+      }
+      return minPath
+    }
+
     fun getNeighbourUnits(unit:Unit):List<Unit>? {
         val x = unit.x
         val y = unit.y
@@ -211,7 +166,7 @@ class CombatMap {
         }
         return neighbours
     }
-    
+
     fun moveUnit(unit: Unit, toPoint:Pair<Int,Int>){
         val px = unit.x
         val py = unit.y
@@ -221,95 +176,71 @@ class CombatMap {
         map[py][px] = 0
         map[unit.y][unit.x] = unit.uid
     }
-    
-    fun moveUnits(){
-        for (unit in getUnitsSorted()){
+
+    fun moveUnits():Boolean{
+        val unitsSorted = getUnitsSorted()
+        var lastDeathAt = -1;
+        var i = 0;
+        for (unit in unitsSorted){
             if (unit.alive()) {
-                val closestPair = getClosestUnitOfType2(unit, if (unit.type == "G") "E" else "G" )
+                i++;
+                //val closestPair = getClosestUnitOfType2(unit, if (unit.type == "G") "E" else "G" )
+                val closestPair = findNearestUnitFrom(unit)
                 if (closestPair == null) {
                     continue
                 }
                 val (c, path) = closestPair
                 println("To $unit closest is $c over $path")
                 if (path.size > 1) {
-                    moveUnit(unit, path[1])
+                    moveUnit(unit, path[0])
                     println("Moved $unit to ${path[1]}")
                 }
-            }
-        }
-    }
-    
-    fun makeHits() {
-        for (unit in getUnitsSorted()){
-            if (unit.alive()){
-                var hu = getPossibleUnitToHit(unit)
-                if (hu != null && hu.type != unit.type){
-                    hu.takeHit(unit.attackPower)
-                    println(" $unit hitting $hu")
-                    if (!hu.alive()){
-                        // hu died
-                        map[hu.y][hu.x] = 0 // remove from map
-                        println("$hu died")
-                    }
-                    
+                if (thenAttack(unit)) {
+                    lastDeathAt = i;
                 }
             }
         }
+        return lastDeathAt == i
     }
-    
+
+    fun thenAttack(unit:Unit):Boolean {
+        var hu = getPossibleUnitToHit(unit)
+        if (hu != null && hu.type != unit.type){
+            hu.takeHit(unit.attackPower)
+            println(" $unit hitting $hu")
+            if (!hu.alive()){
+                // hu died
+                map[hu.y][hu.x] = 0 // remove from map
+                println("$hu died")
+                return true
+            }
+        }
+        return false
+    }
+
     fun getPossibleUnitToHit(unit:Unit):Unit? {
-        var possible:MutableList<Unit> = getNeighbourUnits(unit)!!.filter { it.type != unit.type }.toMutableList()
+        var possible:MutableList<Unit> = getNeighbourUnits(unit)!!.filter ({ it.type != unit.type }).toMutableList()
         if (possible.size > 0) {
-            possible.sortWith(compareBy { it.hitPoints })
+            possible.sortWith(compareBy ({ it.hitPoints }, {it.y}, {it.x}))
             return possible[0]
         }
         return null
     }
-    
-    fun getMoveableLocations(fromPoint:Pair<Int, Int>, including:Pair<Int,Int>):Array<Pair<Int, Int>> {
-        var locations:Array<Pair<Int,Int>> = arrayOf()
-        val (x, y) = fromPoint
-        
-        
-        if ((y + 1) < height){
-            val v = map[y + 1][x]
-            if (v == 0 || (v > 0) && (Pair(x,y+1) == including)){
-                locations += arrayOf(Pair(x,y+1))
-            }
-        }
-        if ((x + 1) < width){
-            val v = map[y][x+1]
-            if (v == 0 || (v > 0) && (Pair(x+1,y) == including)){
-                locations += arrayOf(Pair(x+1,y))
-            }
-        }
-        if ((y - 1) < width){
-            val v = map[y-1][x]
-            if (v == 0 || (v > 0) && (Pair(x,y-1) == including)){
-                locations += arrayOf(Pair(x,y-1))
-            }
-        }
-        if ((x - 1) >= 0){
-            val v = map[y][x-1]
-            if (v == 0 || (v > 0) && (Pair(x-1,y) == including)){
-                locations += arrayOf(Pair(x-1,y))
-            }
-        }
-        
-        return locations
-    }
-    
+
     fun battle(){
         var cycle:Int = 0
-        
+
         while (true) {
             println("Round $cycle")
+            for (u in units) {
+                println("$u")
+            }
             // move
-            moveUnits()
+            val death = moveUnits()
             // then hit
-            makeHits()
+            //makeHits()
             printMap(null)
-            
+
             var stillAlive = 0
             for (unit in getUnitsSorted()) {
                 if (unit.alive()){
@@ -325,19 +256,30 @@ class CombatMap {
                 val winners = if (goblins.size > 0) goblins else elfs
                 var score = 0
                 for (w in winners) {
+                    println("Winner: $w")
                     score += w.hitPoints
                 }
-                score *= (cycle)
+                if(death){
+                    println("Finishes on full round.")
+                    score *= (cycle)
+                }else{
+                    println("Does not finish on full round.")
+                    score *= (cycle-1)
+                }
+
                 println("Winners have $score points")
+                //println("Other value is: ${(score/cycle)*(cycle-1)}")
                 break
             }
+
             if (cycle == 12){
                 //break
             }
             println("====================================================\n\n")
+            //readLine()
         }
     }
-    
+
     fun printMap(mark:List<Pair<Int, Int>>?){
         var y = 0
         for (row in map){
@@ -367,7 +309,6 @@ class CombatMap {
 fun isIn(p:Pair<Int, Int>, lst:List<Pair<Int,Int>>):Boolean{
     for (pp in lst){
         if(p == pp){
-            //println(" $p == $pp")
             return true
         }
     }
@@ -381,9 +322,41 @@ class qentry(val _point:Pair<Int, Int>, val _path:Array<Pair<Int, Int>>, val _va
 }
 
 
-fun main(){
+fun part2(inpfile:String){
+  var elfPoints = 4
+  while (true){
+    println("********************************************")
+    println("\n\n\n\n\n\n")
+    println(" ELF POINTS: $elfPoints")
+    println("\n\n\n\n\n\n")
     var combatMap = CombatMap()
-    combatMap.loadMapFromFile("input.test.2")
+    combatMap.loadMapFromFile(inpfile)
+    for((_,u) in combatMap.units){
+      if(u.type == "E"){
+        u.attackPower = elfPoints
+      }
+    }
+    combatMap.battle()
+    var allAlive = true
+    for((_,u) in combatMap.units){
+      if(u.type == "E" && !u.alive()){
+        allAlive = false
+        break
+      }
+    }
+    if(allAlive){
+      break
+    }
+    elfPoints++
+  }
+  println("Part 2: Elf points: $elfPoints")
+}
+
+
+fun main(args: Array<String>){
+
+    var combatMap = CombatMap()
+    combatMap.loadMapFromFile(args[0])
     //combatMap.printMap(null)
     //combatMap.moveUnits()
     //combatMap.makeHits()
@@ -394,7 +367,9 @@ fun main(){
     //combatMap.printMap(path.toList())
     combatMap.printMap(null)
     combatMap.battle()
-    
+
     //val path = combatMap.findShortestPath(Pair(1,1), Pair(3,2))
     //println("Path -> $path")
+
+    part2(args[0])
 }
