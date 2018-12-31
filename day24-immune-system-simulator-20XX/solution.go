@@ -11,6 +11,7 @@ import (
 )
 
 type Group struct {
+	ID          int
 	Type        string
 	units       int64
 	hitPoints   int64
@@ -31,72 +32,48 @@ func (g *Group) HowMuchDamageTo(dg *Group) int64 {
 	if _, ok := dg.immunities[g.attacks]; ok {
 		return 0 // immune
 	}
-	var fac int64 = 1
-	if _, ok := dg.weaknesses[dg.attacks]; ok {
-		fac = 2
+	damage := g.EffectivePower()
+	if _, ok := dg.weaknesses[g.attacks]; ok {
+		damage *= 2
 	}
-	return g.EffectivePower() * fac
-}
-
-func (g *Group) SelectNextTarget(army Army) *Group {
-	if len(army) == 0 {
-		return nil
-	}
-	sort.Slice(army, func(i, j int) bool {
-		a := army[i]
-		b := army[j]
-		dmgToA := g.HowMuchDamageTo(a)
-		dmgToB := g.HowMuchDamageTo(b)
-		if dmgToA == dmgToB {
-			return a.initiative > b.initiative
-		}
-		return dmgToA > dmgToB
-	})
-
-	return army[0]
+	return damage
 }
 
 func (g *Group) ReceiveDamage(damage int64) {
 	killedUnits := damage / g.hitPoints
 	g.units -= killedUnits
+	if g.units < 0 {
+		g.units = 0
+	}
 }
 
 func (g *Group) Alive() bool {
 	return g.units > 0
 }
 
-func SelectionPhase(immuneSystem, infection Army) []func() {
-	targets := []func(){}
+func (g *Group) String() string {
+	return fmt.Sprintf("Group %d of %s, %d units, %d attack power, %d hit points, %d initiative with %d effective power. Attacks: [%s] Weaknesses: %v. Immunities: %v",
+		g.ID, g.Type, g.units, g.attackPower, g.hitPoints, g.initiative, g.EffectivePower(), g.attacks, g.weaknesses, g.immunities)
 
-	all := append(immuneSystem, infection...)
-	sort.Slice(all, func(i, j int) bool {
-		if all[i].EffectivePower() == all[j].EffectivePower() {
-			return all[i].initiative > all[j].initiative
-		}
-		return all[i].EffectivePower() == all[j].EffectivePower()
-	})
+}
 
-	for _, group := range all {
-		targets = append(targets, func(g *Group) func() {
-			return func() {
-				targetArmy := immuneSystem
-				if g.Type == "immunity" {
-					targetArmy = infection
-				}
-				target := g.SelectNextTarget(targetArmy)
-				if target != nil && target.Alive() {
-					// deal damage
-					target.ReceiveDamage(g.HowMuchDamageTo(target))
-				}
-			}
-		}(group))
+func (g *Group) Clone() *Group {
+	clone := &Group{
+		ID:          g.ID,
+		Type:        g.Type,
+		attackPower: g.attackPower,
+		attacks:     g.attacks,
+		hitPoints:   g.hitPoints,
+		immunities:  g.immunities,
+		initiative:  g.initiative,
+		units:       g.units,
+		weaknesses:  g.weaknesses,
 	}
-
-	return targets
+	return clone
 }
 
 func FilterDeadUnits(army Army) Army {
-	b := army[:0]
+	b := Army{}
 	for _, g := range army {
 		if g.Alive() {
 			b = append(b, g)
@@ -105,26 +82,120 @@ func FilterDeadUnits(army Army) Army {
 	return b
 }
 
-func FightOneRound(immuneSystem, infection Army) (Army, Army) {
-	for _, target := range SelectionPhase(immuneSystem, infection) {
-		target()
-	}
-	// remove dead units
-	immuneSystem = FilterDeadUnits(immuneSystem)
-	infection = FilterDeadUnits(infection)
-	return immuneSystem, infection
-}
-
 func Battle(immuneSystem, infection Army) Army {
+	all := append(Army{}, immuneSystem...)
+	all = append(all, infection...)
+	count := 0
 	for {
-		immuneSystem, infection = FightOneRound(immuneSystem, infection)
-		if len(immuneSystem) == 0 {
+
+		selectedTargets := map[*Group]*Group{}
+		targets := map[*Group]bool{}
+		targSelection := append(Army{}, all...)
+
+		sort.SliceStable(targSelection, func(i, j int) bool {
+			a := targSelection[i]
+			b := targSelection[j]
+
+			if a.EffectivePower() == b.EffectivePower() {
+				return a.initiative > b.initiative
+			}
+			return a.EffectivePower() > b.EffectivePower()
+		})
+
+		for _, group := range targSelection {
+			oppositeArmy := infection
+			if group.Type == "infection" {
+				oppositeArmy = immuneSystem
+			}
+			target := SelectTarget(group, oppositeArmy, targets)
+			selectedTargets[group] = target
+			if target != nil {
+				targets[target] = true
+			}
+		}
+
+		sort.SliceStable(all, func(i, j int) bool {
+			a := all[i]
+			b := all[j]
+			return a.initiative > b.initiative
+		})
+		attacks := 0
+		for _, group := range all {
+			if !group.Alive() {
+				immuneSystem = FilterDeadUnits(immuneSystem)
+				infection = FilterDeadUnits(infection)
+				continue
+			}
+			op := selectedTargets[group]
+			if op == nil || !op.Alive() {
+				immuneSystem = FilterDeadUnits(immuneSystem)
+				infection = FilterDeadUnits(infection)
+				continue
+			}
+
+			prevUnits := op.units
+			op.ReceiveDamage(group.HowMuchDamageTo(op))
+			if prevUnits > op.units {
+				attacks++
+			}
+			immuneSystem = FilterDeadUnits(immuneSystem)
+			infection = FilterDeadUnits(infection)
+
+			if len(immuneSystem) == 0 {
+				return infection
+			}
+
+			if len(infection) == 0 {
+				return immuneSystem
+			}
+		}
+
+		if attacks == 0 {
+			// stalemate
 			return infection
 		}
-		if len(infection) == 0 {
-			return immuneSystem
+
+		all = append(Army{}, immuneSystem...)
+		all = append(all, infection...)
+
+		count++
+
+	}
+}
+
+func SelectTarget(group *Group, fromArmy Army, selected map[*Group]bool) *Group {
+	potential := append(Army{}, fromArmy...)
+	sort.SliceStable(potential, func(i, j int) bool {
+		a := potential[i]
+		b := potential[j]
+		if group.HowMuchDamageTo(a) == group.HowMuchDamageTo(b) {
+			if a.EffectivePower() == b.EffectivePower() {
+				return a.initiative > b.initiative
+			}
+			return a.EffectivePower() > b.EffectivePower()
+		}
+		return group.HowMuchDamageTo(a) > group.HowMuchDamageTo(b)
+	})
+
+	for _, target := range potential {
+		if _, ok := selected[target]; !ok {
+			if group.HowMuchDamageTo(target) > 0 {
+				return target
+			}
 		}
 	}
+
+	return nil
+}
+
+func Boost(immunity Army, boost int64) Army {
+	boostedArmy := Army{}
+	for _, g := range immunity {
+		clone := g.Clone()
+		clone.attackPower += boost
+		boostedArmy = append(boostedArmy, clone)
+	}
+	return boostedArmy
 }
 
 func Part1(inputfile string) int64 {
@@ -134,6 +205,24 @@ func Part1(inputfile string) int64 {
 		totalUnits += group.units
 	}
 	return totalUnits
+}
+
+func Part2(inputfile string) int64 {
+	immuneSystem, infection := loadInput(inputfile)
+	boost := int64(1)
+	for {
+		imm := Boost(immuneSystem, boost)
+		inf := Boost(infection, 0) // just copy
+		winners := Battle(imm, inf)
+		if winners[0].Type == "immunity" {
+			var totalUnits int64 = 0
+			for _, group := range winners {
+				totalUnits += group.units
+			}
+			return totalUnits
+		}
+		boost++
+	}
 }
 
 func loadInput(filename string) (immunity Army, infection Army) {
@@ -183,6 +272,7 @@ func loadInput(filename string) (immunity Army, infection Army) {
 
 		if matches[4] != "" {
 			for _, attrs := range strings.Split(matches[4], ";") {
+				attrs = strings.TrimSpace(attrs)
 				if strings.HasPrefix(attrs, "immune to") {
 					// immunity
 					for _, immunity := range strings.Split(attrs[9:], ",") {
@@ -190,7 +280,7 @@ func loadInput(filename string) (immunity Army, infection Army) {
 					}
 				} else {
 					// weakness
-					for _, weakness := range strings.Split(attrs[7:], ",") {
+					for _, weakness := range strings.Split(attrs[8:], ",") {
 						group.weaknesses[strings.TrimSpace(weakness)] = true
 					}
 				}
@@ -198,9 +288,11 @@ func loadInput(filename string) (immunity Army, infection Army) {
 		}
 
 		if state == "imm-sys" {
+			group.ID = len(immunity) + 1
 			group.Type = "immunity"
 			immunity = append(immunity, group)
 		} else {
+			group.ID = len(infection) + 1
 			group.Type = "infection"
 			infection = append(infection, group)
 		}
@@ -219,4 +311,13 @@ func mustParseInt(str string) int64 {
 
 func main() {
 	fmt.Println("Part 1:", Part1("input"))
+	// immuneSystem, infection := loadInput("input")
+	// for _, gg := range immuneSystem {
+	// 	fmt.Println(gg.String())
+	// }
+	// fmt.Println("-------------------------")
+	// for _, gg := range infection {
+	// 	fmt.Println(gg.String())
+	// }
+	fmt.Println("Part 2:", Part2("input"))
 }
