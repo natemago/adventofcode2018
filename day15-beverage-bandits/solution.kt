@@ -17,7 +17,7 @@ class Unit(val uid: Int, val utype: String, val posx: Int, val posy: Int) {
     }
 
     fun alive(): Boolean {
-        return hitPoints >= 0
+        return hitPoints > 0
     }
 
     override fun toString():String{
@@ -146,6 +146,16 @@ class CombatMap {
         if (n != null){
           if(minPath == null || n.second.size < minPath.second.size){
             minPath = n
+          }else if(n.second.size == minPath.second.size){
+            val mLast = minPath.second[minPath.second.size - 1]
+            val pLast = n.second[n.second.size - 1]
+            if(pLast.second < mLast.second){
+              minPath = n
+            }else if(pLast.second == mLast.second){
+              if (pLast.first < mLast.first){
+                minPath = n
+              }
+            }
           }
         }
       }
@@ -181,6 +191,7 @@ class CombatMap {
         val unitsSorted = getUnitsSorted()
         var lastDeathAt = -1;
         var i = 0;
+
         for (unit in unitsSorted){
             if (unit.alive()) {
                 i++;
@@ -200,6 +211,11 @@ class CombatMap {
                 }
             }
         }
+
+        for(unit in getUnitsSorted().filter{ !it.alive() }){
+          units.remove(unit.id)
+        }
+
         return lastDeathAt == i
     }
 
@@ -331,20 +347,20 @@ fun part2(inpfile:String){
     println("\n\n\n\n\n\n")
     var combatMap = CombatMap()
     combatMap.loadMapFromFile(inpfile)
+    var elfs = combatMap.units.values.filter({it.type == "E" }).size
     for((_,u) in combatMap.units){
       if(u.type == "E"){
         u.attackPower = elfPoints
       }
     }
     combatMap.battle()
-    var allAlive = true
+    var elfsAlive = 0
     for((_,u) in combatMap.units){
-      if(u.type == "E" && !u.alive()){
-        allAlive = false
-        break
+      if(u.type == "E" && u.alive()){
+        elfsAlive++
       }
     }
-    if(allAlive){
+    if(elfsAlive == elfs){
       break
     }
     elfPoints++
