@@ -7,7 +7,7 @@
 
 | Day 1 | Day 2 | Day 3 | Day 4 | Day 5 |
 |-------|-------|-------|-------|-------|
-| [NASM](http://www.nasm.us/) ![NASM](https://upload.wikimedia.org/wikipedia/commons/4/48/Netwide_Assembler.svg) | [Scheme]() ![Scheme](https://upload.wikimedia.org/wikipedia/commons/3/39/Lambda_lc.svg) | [Standard ML](http://www.mlton.org/) | [Haskell](https://www.haskell.org/) ![Haskell](https://upload.wikimedia.org/wikipedia/commons/1/1c/Haskell-Logo.svg) | [Clojure](https://clojure.org) ![Clojure](https://upload.wikimedia.org/wikipedia/commons/5/5d/Clojure_logo.svg)
+| [NASM](http://www.nasm.us/) ![NASM](https://upload.wikimedia.org/wikipedia/commons/4/48/Netwide_Assembler.svg | width=100) | [Scheme]() ![Scheme](https://upload.wikimedia.org/wikipedia/commons/3/39/Lambda_lc.svg) | [Standard ML](http://www.mlton.org/) | [Haskell](https://www.haskell.org/) ![Haskell](https://upload.wikimedia.org/wikipedia/commons/1/1c/Haskell-Logo.svg) | [Clojure](https://clojure.org) ![Clojure](https://upload.wikimedia.org/wikipedia/commons/5/5d/Clojure_logo.svg)
 
 | Day 6 | Day 7 | Day 8 | Day 9 | Day 10 |
 |-------|-------|-------|-------|--------|
@@ -15,7 +15,7 @@
 
 | Day 11 | Day 12 | Day 13 | Day 14 | Day 15 |
 |--------|--------|--------|--------|--------|
-| [Bash](https://www.gnu.org/software/bash/) ![Bash](https://upload.wikimedia.org/wikipedia/commons/8/82/Gnu-bash-logo.svg) | [Julia](https://julialang.org/) ![Julia](https://upload.wikimedia.org/wikipedia/commons/6/69/Julia_prog_language.svg) | [Awk](https://www.gnu.org/software/gawk/) | [Nim](https://nim-lang.org/) ![Nim](https://upload.wikimedia.org/wikipedia/commons/1/1b/Nim-logo.png) | [Kotlin](https://kotlinlang.org/) ![Kotlin](https://upload.wikimedia.org/wikipedia/commons/7/74/Kotlin-logo.svg) |
+| [Bash](https://www.gnu.org/software/bash/) ![Bash](https://upload.wikimedia.org/wikipedia/commons/8/82/Gnu-bash-logo.svg) | [Julia](https://julialang.org/) ![Julia](https://upload.wikimedia.org/wikipedia/commons/6/69/Julia_prog_language.svg) | [Awk](https://www.gnu.org/software/gawk/) | [Nim](https://nim-lang.org/) ![Nim](https://upload.wikimedia.org/wikipedia/commons/1/1b/Nim-logo.png | width=100) | [Kotlin](https://kotlinlang.org/) ![Kotlin](https://upload.wikimedia.org/wikipedia/commons/7/74/Kotlin-logo.svg) |
 
 | Day 16 | Day 17 | Day 18 | Day 19 | Day 20 |
 |--------|--------|--------|--------|--------|
